@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Basketball Joint Load Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f6fa;
+            margin: 0;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 28px;
+        }
+
+        .upload-box {
+            border: 2px dashed #aaa;
+            padding: 24px;
+            border-radius: 12px;
+            background: #fafafa;
+            margin-bottom: 24px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .progress-area {
+            display: none;
+            margin-top: 24px;
+            margin-bottom: 24px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #2563eb;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            margin-top: 10px;
+            color: #333;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: #f8fafc;
+            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .card-title {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .report {
+            background: #111827;
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        .downloads {
+            margin-top: 20px;
+        }
+
+        .downloads a {
+            display: inline-block;
+            margin-right: 12px;
+            color: white;
+            background: #10b981;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+        }
+
+        #resultArea {
+            display: none;
+        }
+
+        .note {
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Basketball Joint Load Analyzer</h1>
+    <p class="subtitle">
+        농구 드리블 영상을 업로드하면 AI 스켈레톤 분석을 통해 관절 부하와 위험 구간을 추정합니다.
+    </p>
+
+    <form id="uploadForm" class="upload-box">
+        <p><strong>분석할 영상 파일을 선택하세요.</strong></p>
+        <input type="file" name="video" accept="video/*" required>
+        <br><br>
+        <button id="analyzeButton" type="submit">분석 시작</button>
+    </form>
+
+    <div id="errorBox" class="error"></div>
+
+    <div id="progressArea" class="progress-area">
+        <div class="progress-bar-bg">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="progressText" class="progress-text">대기 중</div>
+    </div>
+
+    <div id="resultArea">
+        <h2>분석 요약</h2>
+
+        <div class="summary">
+            <div class="card">
+                <div class="card-title">평균 부하가 가장 큰 관절</div>
+                <div id="mostLoadedJoint" class="card-value"></div>
+                <div id="mostLoadedScore"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">순간 최대 부하 관절</div>
+                <div id="peakJoint" class="card-value"></div>
+                <div id="peakScore"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">평균 무릎 좌우 비대칭</div>
+                <div id="avgKneeAsymmetry" class="card-value"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">전체 최대 부하 점수</div>
+                <div id="maxLoad" class="card-value"></div>
+            </div>
+        </div>
+
+        <h2>피드백 리포트</h2>
+        <div id="reportBox" class="report"></div>
+
+        <div class="downloads">
+            <a href="/download/csv">CSV 다운로드</a>
+            <a href="/download/report">리포트 다운로드</a>
+        </div>
+    </div>
+
+    <p class="note">
+        이 MVP는 실제 지면반력이나 관절 토크를 직접 측정하지 않고,
+        영상 기반 관절 각도, 각속도, 좌우 비대칭성을 이용해 상대적 관절 부하를 추정합니다.
+    </p>
+</div>
+
+<script>
+    const form = document.getElementById("uploadForm");
+    const analyzeButton = document.getElementById("analyzeButton");
+    const progressArea = document.getElementById("progressArea");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
+    const errorBox = document.getElementById("errorBox");
+    const resultArea = document.getElementById("resultArea");
+    const reportBox = document.getElementById("reportBox");
+
+    let progressTimer = null;
+
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        errorBox.style.display = "none";
+        resultArea.style.display = "none";
+        progressArea.style.display = "block";
+        progressBar.style.width = "0%";
+        progressText.textContent = "업로드 중...";
+        analyzeButton.disabled = true;
+
+        const formData = new FormData(form);
+
+        const response = await fetch("/analyze", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+            showError(data.error);
+            analyzeButton.disabled = false;
+            return;
+        }
+
+        startProgressPolling();
+    });
+
+    function startProgressPolling() {
+        progressTimer = setInterval(async function () {
+            const response = await fetch("/progress");
+            const data = await response.json();
+
+            progressBar.style.width = data.percent + "%";
+            progressText.textContent = data.message + " (" + data.percent + "%)";
+
+            if (data.error) {
+                clearInterval(progressTimer);
+                showError(data.error);
+                analyzeButton.disabled = false;
+                return;
+            }
+
+            if (data.done) {
+                clearInterval(progressTimer);
+                progressBar.style.width = "100%";
+                progressText.textContent = "분석 완료 (100%)";
+                analyzeButton.disabled = false;
+                showResult(data);
+            }
+        }, 500);
+    }
+
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.style.display = "block";
+        progressArea.style.display = "none";
+    }
+
+    function showResult(data) {
+        const summary = data.summary;
+
+        document.getElementById("mostLoadedJoint").textContent = summary.most_loaded_joint;
+        document.getElementById("mostLoadedScore").textContent = summary.most_loaded_score + " / 100";
+
+        document.getElementById("peakJoint").textContent = summary.peak_joint;
+        document.getElementById("peakScore").textContent = summary.peak_score + " / 100";
+
+        document.getElementById("avgKneeAsymmetry").textContent = summary.avg_knee_asymmetry + "°";
+        document.getElementById("maxLoad").textContent = summary.max_load + " / 100";
+
+        reportBox.textContent = data.report;
+        resultArea.style.display = "block";
+    }
+</script>
+</body>
+</html>
