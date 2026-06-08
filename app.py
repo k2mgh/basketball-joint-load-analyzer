@@ -78,6 +78,7 @@ def index():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
+    print("Analyze request received", flush=True)
     if task_status["running"]:
         return jsonify({
             "ok": False,
@@ -109,12 +110,14 @@ def analyze():
     output_report_path = os.path.join(OUTPUT_FOLDER, "report.txt")
 
     file.save(input_path)
+    print("File saved:", input_path, flush=True)
 
     thread = threading.Thread(
         target=run_analysis,
         args=(input_path, output_csv_path, output_report_path)
     )
     thread.start()
+    print("Analysis thread started", flush=True)
 
     return jsonify({
         "ok": True,
